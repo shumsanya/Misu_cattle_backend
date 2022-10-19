@@ -46,6 +46,18 @@ use yii\helpers\Url;
             ];
         }
 
+
+        public static function checkDeviceName($deviceName)
+        {
+            $result = Device::find()->where(['device_name' => $deviceName])->asArray()->one();
+
+            if ( empty($result['device_name']) ){
+                return true;
+            }
+
+            return false;
+        }
+
         public static function createDevice($deviceName, $deviceNumber)
         {
             $model = new Device();
@@ -54,9 +66,7 @@ use yii\helpers\Url;
             $model->date = date('Y-m-d G:i');
             $model->save();
 
-            $result = Device::find()->where(['device_name' => $deviceName])->asArray()->one();
-
-            return $result;
+            return Device::find()->where(['device_name' => $deviceName])->asArray()->one();
         }
 
     }

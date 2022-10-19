@@ -3,26 +3,17 @@
 namespace app\controllers;
 
 use app\models\Device;
-use app\models\SignupForm;
-use app\models\LoginForm;
 use app\models\Data;
-use phpDocumentor\Reflection\DocBlock\Tags\Param;
 use Yii;
-use yii\base\InvalidConfigException;
 use yii\filters\Cors;
-use yii\filters\VerbFilter;
-use yii\web\NotFoundHttpException;
-use yii\web\Response;
 use yii\web\Controller;
-use yii\rest\ActiveController;
+
+
+
 
 
 class ApiController extends Controller
 {
-
-    /*DebugPanel::addData(\Yii::$app->request->post());
-    DebugPanel::addData($user->getErrors());*/
-
     public $enableCsrfValidation = false; // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     public function behaviors()
@@ -31,11 +22,8 @@ class ApiController extends Controller
             'corsFilter' => [
                 'class' => Cors::class,
                 'cors' => [
-                    // restrict access to
-                    //'Origin' => ['http://localhost:3000/about'],
                     'Origin' => ['*'],
                     // Allow only POST and PUT methods
-                    //'Access-Control-Request-Origin' => 'http://localhost:3000/about',
                     'Access-Control-Request-Method' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
                     // Allow only headers 'X-Wsse'
                     'Access-Control-Request-Headers' => ['*'],
@@ -51,36 +39,10 @@ class ApiController extends Controller
         ];
     }
 
+
     public function actionGetData()
     {
-        $result = array();
-        $stepsArray = array();
-        $allData = array();
-        $sumSteps = 0;
-
-        /*$sql = 'SELECT DISTINCT device_id FROM data';
-
-        $arr['number'] = Data::findbysql($sql)->all();
-
-        $quantity = count($arr['number']);
-
-        for ($i = 1; $i <= $quantity; $i++) {
-
-            $result[$i] = Data::find()->where(['device_id' => $i])->asArray()->all();
-
-            foreach ($result[$i] as $steps) {
-                $sumSteps += $steps['steps'];
-            }
-
-            $stepsArray[$i] = $sumSteps;
-            $sumSteps = 0;
-        }
-
-        $allData = [[$result], [$stepsArray]];*/
-
-
         $allData = Device::find()
-            //->select('id, device_id, device_name')
             ->asArray()
             ->all();
 
@@ -90,44 +52,12 @@ class ApiController extends Controller
 
     public function actionDeviceData()
     {
-
         if (YII::$app->request->get()) {
             $params = Yii::$app->request->getBodyParams();
 
-            $model = new Data();
+            $device_name = $params['device_name'];
 
-
-            $device_name = $params[array_key_first($params)];
-
-            foreach ($params['package'] as $item)
-            {
-                foreach ($item as $key => $value)
-                {
-                    $model->$key = $value;
-                }
-
-                if (array_key_first($params) === 'device_name') {
-                    $device = Device::find()->where(['device_name' => $device_name])->asArray()->one();
-                    $model->device_id = $device['id'];
-                }
-
-                //$model->date = date('Y-m-d G:i');    // дата по замовчуванню;
-                $model->save(false);
-            }
-            return json_encode(['actionTestData' => 'ok']);
-        }
-        return json_encode(['actionTestData' => 'error']);
-    }
-
-
-    public function actionTestData()
-    {
-        if (YII::$app->request->get()) {
-            $params = Yii::$app->request->getBodyParams();
-
-            $device_name = $params[array_key_first($params)];
-
-            foreach ($params['package'] as $item)
+            foreach ($params['packages'] as $item)
             {
                 $model = new Data();
 
@@ -141,94 +71,84 @@ class ApiController extends Controller
                     }else {
                         $model->$key = $value;
                     }
-
                 }
-
-                if (array_key_first($params) === 'device_name') {
                     $device = Device::find()->where(['device_name' => $device_name])->asArray()->one();
                     $model->device_id = $device['id'];
-                }
 
                 //$model->date = date('Y-m-d G:i');    // дата по замовчуванню;
                 $model->save(false);
             }
-
-            return json_encode(['actionTestData' => 'ok']);
+            return json_encode(['result' => 'ok']);
         }
-
-        return json_encode(['$method' => 'error']);
+        return json_encode(['result' => 'error']);
     }
+
 
 
     public function actionBuildChart()
     {
-        // отримуємо id девайса
-        if (YII::$app->request->get()) {
-            $device_id = Yii::$app->request->getBodyParams();
-
-            $params = Data::find()
-                ->where(['device_id' => $device_id['device_id']])
-                ->asArray()
-                ->all();
-
-            $masLabels = array();
-
-            foreach ($params as $key=>$value){
-
-                if ( date('Y-m-d', strtotime($value['date_default'])) === date('Y-m-d') ){
-                    $masLabels[] = 'сьогодні в '. date('G:i', strtotime($value['date']));
-                }else{
-                    $masLabels[] = date('d-m-Y G:i', strtotime($value['date']));
-                }
-
-            }
-            return  json_encode( $x=['data'=>$params, 'label'=> $masLabels]);
-        }else {
-            return json_encode( $x=['result'=>'array_empty']);
-        }
-    }
-
-    public function actionBuildChartParams()
-    {
-        // отримуємо id девайса
         if (YII::$app->request->get()) {
             $params = Yii::$app->request->getBodyParams();
 
-            $startPeriod = $params['startPeriod'];
-            $endPeriod = $params['endPeriod'];
-            $deviceId = $params['device_id'];
-            //$param = $params['param'];
+            $result = array();
+            $new_array_params = array();
 
-            // добавляємо та віднімаємо 1 день для адекватної виборки
-            $newDateStartPeriod = date('Y-m-d', strtotime($startPeriod."-1 day" ));
-            $newDateEndPeriod = date('Y-m-d', strtotime($endPeriod."+1 day" ));
-            $resultData = Data::deviceDateParams($newDateEndPeriod, $newDateStartPeriod, $deviceId);
+            if ( isset($params['startPeriod']) ){
+                // якщо є заданий період
+                $new_array_params = self::actionBuildChartParams($params);
 
-            $masLabels = array();
-
-            foreach ($resultData as $key=>$value){
-
-                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  строку нужно
-                    if ( date('Y-m-d', strtotime($value['date_default'])) === date('Y-m-d') ){
-                        $masLabels[] = 'сьогодні в '. date('G:i', strtotime($value['date']));
-                    }else{
-                        $masLabels[] = date('d-m-Y G:i', strtotime($value['date']));
-                    }
-
-            }
-
-
-            // если масив result пуст (в заданом промежутке времени нету данных)
-            if (empty($resultData)){
-                return json_encode(['result' => 'array_empty']);
             } else {
-                return json_encode( $x=['data'=>$resultData, 'label'=> $masLabels]);
+                // вибір даних за кількістю записів в БД
+                $result = Data::getDataDeviceLimit( $params['device_id'], $params['limit'], date('Y-m-d G:i', $params['date']/1000));
+                // перезаписується масив у зворотному порядку
+                $new_array_params = array_reverse($result);
             }
 
 
-        }
+            // якщо даних немає
+            if (count($new_array_params) === 0){
+                return json_encode( $x=['result'=>'array_empty', 'visual'=>$params['visualSwitch']]);
+            }
 
-        return json_encode(['result' => 'error_getBodyParams']);
+            // розділення строк на числа
+            $new_array_data = Data::getDataParse($new_array_params);
+
+            // сума модулів
+            if ($params['visualSwitch'] === 'module')
+            {
+                foreach ($new_array_data as $key=>$value){
+                    $new_array_data[$key]['acceleration'] = Data::sumModule($value['acceleration']);
+                    $new_array_data[$key]['rotation'] = Data::sumModule($value['rotation']);
+                    $new_array_data[$key]['gravity'] = Data::sumModule($value['gravity']);
+                }
+            }
+
+            // якщо все добре відправляється масив даних
+            return  json_encode( $x=['newData'=>$new_array_data, 'visual'=>$params['visualSwitch'], 'date'=>date('Y-m-d G:i', $params['date']/1000)] );
+        }else {
+            // якщо не вдалося отримати запит  'data'=>$new_array_params,
+            return json_encode( $x=['result'=>'array_error']);
+        }
+    }
+
+
+
+    public static function actionBuildChartParams($params)
+    {
+        $startPeriod = $params['startPeriod'];
+        $endPeriod = $params['endPeriod'];
+        $deviceId = $params['device_id'];
+
+        $newDateStartPeriod = date('Y-m-d H:i:s', strtotime($startPeriod ));
+        $newDateEndPeriod = date('Y-m-d H:i:s', strtotime($endPeriod ));
+        $resultData = Data::getDeviceDateParams($newDateEndPeriod, $newDateStartPeriod, $deviceId);
+
+        // якщо даних немає
+        if (count($resultData) === 0){
+            return json_encode( $x=['result'=>'array_empty', 'visual'=>$params['visualSwitch']]);
+        } else {
+            return $resultData;
+        }
     }
 
 
@@ -238,13 +158,18 @@ class ApiController extends Controller
         if (YII::$app->request->get()) {
             $params = Yii::$app->request->getBodyParams();
 
+            // перевірка чи існує така назва девайсу
+            if (!Device::checkDeviceName($params['deviceName']) ){
+                return json_encode(['CreateDevice' => 'deviceName already exists']);
+            }
+
             $deviceName = $params['deviceName'];
             $deviceNumber = $params['deviceNumber'];
+            $result = Device::createDevice($deviceName, $deviceNumber);
 
-            return $result = Device::createDevice($deviceName, $deviceNumber);
+            return json_encode($result);
         }
-        return json_encode(['request->get() - error' => 'actionCreateDevice']);
+        return json_encode(['CreateDevice' => 'error']);
     }
-
 
 }
