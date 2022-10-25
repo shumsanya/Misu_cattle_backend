@@ -92,8 +92,8 @@ class Data extends ActiveRecord
     }
 
 
-    public static function getDataParse($new_array_params){
-
+    public static function getDataParse($new_array_params)
+    {
         $array = array();
 
         foreach ($new_array_params as $key=>$value)

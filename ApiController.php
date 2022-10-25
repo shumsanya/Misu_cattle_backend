@@ -84,6 +84,46 @@ class ApiController extends Controller
     }
 
 
+    public function actionDeviceDataArduino()
+    {
+        if (YII::$app->request->get()) {
+            $params = Yii::$app->request->getBodyParams();
+
+            $device_name = $params['device_name'];
+
+            $time = time();
+            $startTime = $time - count($params['packages']);
+
+            foreach ($params['packages'] as $item)
+            {
+                $item['date'] = date('Y-m-d H:i:s', $startTime);
+                $startTime++;
+
+                $model = new Data();
+
+                foreach ($item as $key => $value)
+                {
+                    if ($key === 'date'){
+                        $date_ = substr($value, 0, 16);
+                        //$time = substr($value, 11, 8);
+                        // $model->$key = $date_;
+                        $model->$key = date('Y-m-d G:i', strtotime($date_. " + 2 hour"));
+                        $model->date_default = $value;
+                    }else {
+                        $model->$key = $value;
+                    }
+                }
+                $device = Device::find()->where(['device_name' => $device_name])->asArray()->one();
+                $model->device_id = $device['id'];
+
+                //$model->date = date('Y-m-d G:i');    // дата по замовчуванню;
+                $model->save(false);
+            }
+            return json_encode(['result' => 'ok']);
+        }
+        return json_encode(['result' => 'error']);
+    }
+
 
     public function actionBuildChart()
     {
@@ -106,9 +146,14 @@ class ApiController extends Controller
 
 
             // якщо даних немає
-            if (count($new_array_params) === 0){
+            if (!$new_array_params){
                 return json_encode( $x=['result'=>'array_empty', 'visual'=>$params['visualSwitch']]);
             }
+
+
+            // пошук провалів в записі даних, чи є 60 записів в 1 хвилину
+            $incomplete_data = self::actionIncompleteData($new_array_params);
+
 
             // розділення строк на числа
             $new_array_data = Data::getDataParse($new_array_params);
@@ -124,7 +169,7 @@ class ApiController extends Controller
             }
 
             // якщо все добре відправляється масив даних
-            return  json_encode( $x=['newData'=>$new_array_data, 'visual'=>$params['visualSwitch'], 'date'=>date('Y-m-d G:i', $params['date']/1000)] );
+            return  json_encode( $x=['newData'=>$new_array_data, 'visual'=>$params['visualSwitch'], 'incomplete_data'=>$incomplete_data,'date'=>date('Y-m-d G:i', $params['date']/1000)] );
         }else {
             // якщо не вдалося отримати запит  'data'=>$new_array_params,
             return json_encode( $x=['result'=>'array_error']);
@@ -150,6 +195,49 @@ class ApiController extends Controller
             return $resultData;
         }
     }
+
+
+    public static function actionIncompleteData($array)
+    {
+        $count = 0;
+        $array_incomplete = array();
+        $x = true;
+
+        foreach($array as $key=>$value)
+        {
+            if (isset($x)){
+                $newDate = date('Y-m-d H:i', strtotime( $value['date'] ));
+                $x = false;
+            }
+
+            if ($newDate == $value['date']) {
+                $count++;
+
+            } else {
+                $array_incomplete['problems'] = $newDate.'  всього записів - '.$count;
+                $newDate = date('Y-m-d H:i', strtotime($newDate.'+ 1 day'));
+                $count = 0;
+            }
+
+
+
+           /* if ($count === 0){
+                $newDate = date('Y-m-d H:i', strtotime( $value['date'] ));
+                //$date_item = $value['date'];
+            }
+
+            if ($newDate === $value['date']){
+                $count++;
+            } else {
+                $array_incomplete['problems'] = $newDate.'  всього записів - '.$count;
+                $count = 0;
+            }*/
+        }
+
+        return $array_incomplete;
+    }
+
+
 
 
     public function actionCreateDevice()
