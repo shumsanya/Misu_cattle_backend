@@ -93,6 +93,62 @@ class ApiController extends Controller
 
             $time = time();
             $startTime = $time - count($params['packages']);
+            $dataInsert = array();
+            $tableName = 'data';
+            $x = 0;
+
+            foreach ($params['packages'] as $item)
+            {
+                $item['date'] = date('Y-m-d H:i:s', $startTime);
+                $startTime++;
+
+                //$model = new Data();
+
+                foreach ($item as $key => $value)
+                {
+                    if ($key === 'date'){
+                        $date_ = substr($value, 0, 16);
+                            //$time = substr($value, 11, 8);
+                            // $model->$key = $date_;
+                        $dataInsert[][$x] = date('Y-m-d G:i', strtotime($date_. " + 2 hour"));
+                        $dataInsert[][$x] = $value;
+                    }else {
+                        $dataInsert[][$x] = $value;
+                    }
+                }
+                $device = Device::find()->where(['device_name' => $device_name])->asArray()->one();
+                $dataInsert[][$x] = $device['id'];
+
+                $x++;
+                // $model->save(false);
+            }
+
+            $insertCount = 0; // чи потрібно ?
+            if(count($dataInsert)>0){
+                $columnNameArray=['rotation', 'acceleration', 'date', 'device_id'];
+                // below line insert all your record and return number of rows inserted
+                $insertCount = Yii::$app->db->createCommand()
+                    ->batchInsert(
+                        $tableName, $columnNameArray, $dataInsert
+                    )
+                    ->execute();
+            }
+
+            return json_encode(['result' => 'ok', '$insertCount' => $insertCount]);
+        }
+        return json_encode(['result' => 'error']);
+    }
+
+
+    public function actionDeviceDataArduino_ОК()
+    {
+        if (YII::$app->request->get()) {
+            $params = Yii::$app->request->getBodyParams();
+
+            $device_name = $params['device_name'];
+
+            $time = time();
+            $startTime = $time - count($params['packages']);
 
             foreach ($params['packages'] as $item)
             {
@@ -201,37 +257,28 @@ class ApiController extends Controller
     {
         $count = 0;
         $array_incomplete = array();
+        $newDate = '';
         $x = true;
 
         foreach($array as $key=>$value)
         {
-            if (isset($x)){
+            if ($x){
                 $newDate = date('Y-m-d H:i', strtotime( $value['date'] ));
+                $array_incomplete['date_s'] = $newDate;
+                $array_incomplete['$key'] = date('Y-m-d H:i', strtotime( $value['date'] ));
                 $x = false;
             }
 
-            if ($newDate == $value['date']) {
+            if ($newDate === date('Y-m-d H:i', strtotime( $value['date'] ))) {
                 $count++;
-
+                $array_incomplete[$key] = $count;
             } else {
-                $array_incomplete['problems'] = $newDate.'  всього записів - '.$count;
-                $newDate = date('Y-m-d H:i', strtotime($newDate.'+ 1 day'));
+                $array_incomplete['problems'.$key] = $newDate.'  всього записів - '.$count;
+                $newDate = date('Y-m-d H:i', strtotime($newDate.'+ 1 minutes'));
+                $array_incomplete['date_posle+1'] = $newDate;
                 $count = 0;
             }
 
-
-
-           /* if ($count === 0){
-                $newDate = date('Y-m-d H:i', strtotime( $value['date'] ));
-                //$date_item = $value['date'];
-            }
-
-            if ($newDate === $value['date']){
-                $count++;
-            } else {
-                $array_incomplete['problems'] = $newDate.'  всього записів - '.$count;
-                $count = 0;
-            }*/
         }
 
         return $array_incomplete;
