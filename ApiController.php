@@ -7,7 +7,8 @@ use app\models\Data;
 use Yii;
 use yii\filters\Cors;
 use yii\web\Controller;
-
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 
 
@@ -139,7 +140,9 @@ class ApiController extends Controller
         return json_encode(['result' => 'error']);
     }
 
-
+/**
+* вставка в БД одним пакетом
+*/
     public function actionDeviceDataArduino_ОК()
     {
         if (YII::$app->request->get()) {
@@ -252,15 +255,51 @@ class ApiController extends Controller
         }
     }
 
-
+    /**
+     * перевірка на пропуски записів до БД (чи всі дані записано)
+     * @param $array
+     * @return array
+     */
     public static function actionIncompleteData($array)
     {
         $count = 0;
         $array_incomplete = array();
-        $newDate = '';
-        $x = true;
+        $arrayDate = array();
+        $x = 0;
 
-        foreach($array as $key=>$value)
+        $start_item = current($array);
+        $start_date = date('Y-m-d H:i', strtotime( $start_item['date'] ) );
+        $newDate = $start_date;
+
+        $and_item = end($array);
+        $end_date = date('Y-m-d H:i', strtotime( $and_item['date'] ) );
+
+        foreach($array as $key=>$value){
+
+            $arrayDate[] = date('Y-m-d H:i', strtotime( $value['date'] ) );
+            //$array_incomplete[] = date('Y-m-d H:i', strtotime( $value['date'] ) );
+
+        }
+
+
+        while ($newDate != $end_date)
+        {
+            if ( in_array( $newDate, $arrayDate ))
+            {
+                $newDate = date('Y-m-d H:i', strtotime($newDate.'+ 1 minute'));
+                $count++;
+
+            } else
+            {
+                $array_incomplete['problems'.$x] = $newDate.'  всього записів - '.$count;
+                $newDate = date('Y-m-d H:i', strtotime($newDate.'+ 1 minute'));
+                //$array_incomplete['$count'] = $count;
+                $count = 0;
+                $x ++;
+            }
+        }
+
+       /* foreach($array as $key=>$value)
         {
             if ($x){
                 $newDate = date('Y-m-d H:i', strtotime( $value['date'] ));
@@ -269,7 +308,9 @@ class ApiController extends Controller
                 $x = false;
             }
 
-            if ($newDate === date('Y-m-d H:i', strtotime( $value['date'] ))) {
+
+            //if ($newDate === date('Y-m-d H:i', strtotime( $value['date'] ))) {
+            if ( in_array($newDate, date('Y-m-d H:i', strtotime( $value['date'] )) )){
                 $count++;
                 $array_incomplete[$key] = $count;
             } else {
@@ -279,14 +320,17 @@ class ApiController extends Controller
                 $count = 0;
             }
 
-        }
+        }*/
 
         return $array_incomplete;
     }
 
 
-
-
+    /**
+     * Збереження до БД нового девайсу
+     * @return false|string
+     * @throws \yii\base\InvalidConfigException
+     */
     public function actionCreateDevice()
     {
         // отримуємо данні девайса
@@ -305,6 +349,134 @@ class ApiController extends Controller
             return json_encode($result);
         }
         return json_encode(['CreateDevice' => 'error']);
+    }
+
+
+    /**
+     * Створення збереження файлу EXCEL, та відправка url на фронт
+     * @throws \PhpOffice\PhpSpreadsheet\Writer\Exception
+     */
+    public function actionCreateExcel()
+    {
+        if (YII::$app->request->get()) {
+            $params = Yii::$app->request->getBodyParams();
+
+            $result = array();
+            $new_array_params = array();
+
+            if (isset($params['startPeriod'])) {
+                // якщо є заданий період
+                $new_array_params = self::actionBuildChartParams($params);
+
+            } else {
+                // вибір даних за кількістю записів в БД
+                $result = Data::getDataDeviceLimit($params['device_id'], $params['limit'], date('Y-m-d G:i', $params['date'] / 1000));
+                // перезаписується масив у зворотному порядку
+                $new_array_params = array_reverse($result);
+            }
+
+            // якщо даних немає
+            if (!$new_array_params) {
+                return json_encode($x = ['result' => 'array_empty', 'visual' => $params['visualSwitch']]);
+            }
+
+            // розділення строк на числа
+            $new_array_data = Data::getDataParse($new_array_params);
+
+//************************************************************************************************************************************************
+
+            //  CREATE A NEW SPREADSHEET
+            $spreadsheet = new Spreadsheet();
+
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('B')
+                ->setAutoSize(true);
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('C')
+                ->setAutoSize(true);
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('D')
+                ->setAutoSize(true);
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('E')
+                ->setAutoSize(true);
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('F')
+                ->setAutoSize(true);
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('G')
+                ->setAutoSize(true);
+            $spreadsheet->getActiveSheet()
+                ->getColumnDimension('H')
+                ->setAutoSize(true);
+             $spreadsheet->getActiveSheet()
+                ->getColumnDimension('I')
+                ->setAutoSize(true);
+             $spreadsheet->getActiveSheet()
+                ->getColumnDimension('J')
+                ->setAutoSize(true);
+
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // SET CELL VALUE
+            $sheet->setCellValue("B2", "DEVICE ID");
+            $sheet->setCellValue("C2", "ACCELERATION X");
+            $sheet->setCellValue("D2", "ACCELERATION Y");
+            $sheet->setCellValue("E2", "ACCELERATION Z");
+            $sheet->setCellValue("F2", "ROTATION X");
+            $sheet->setCellValue("G2", "ROTATION Y");
+            $sheet->setCellValue("H2", "ROTATION Z");
+            $sheet->setCellValue("I2", "TEMPERATURE");
+            $sheet->setCellValue("J2", "DATE");
+
+            $count = 3;
+            foreach ($new_array_data as $key => $value) {
+                $sheet->setCellValue("B" . $count, $value['device_id']);
+                $sheet->setCellValue("C" . $count, $value['acceleration'][0]);
+                $sheet->setCellValue("D" . $count, $value['acceleration'][1]);
+                $sheet->setCellValue("E" . $count, $value['acceleration'][2]);
+                $sheet->setCellValue("F" . $count, $value['rotation'][0]);
+                $sheet->setCellValue("G" . $count, $value['rotation'][1]);
+                $sheet->setCellValue("H" . $count, $value['rotation'][2]);
+              //  $sheet->setCellValue("I" . $count, $value['temperature']);
+                $sheet->setCellValue("J" . $count, $value['label']);
+                $count++;
+            }
+
+            $writer = new Xlsx($spreadsheet);
+
+
+            // видалити попередній файл якщо він був створений більше години тому
+            $files = glob('C:\OpenServer\domains\localhost\Misu_Cattle\assets\download_files\*');
+            $date_time = date("Y-m-d G:i");
+            if (count($files) > 0)
+            {
+                foreach ($files as $file) {
+                    $test[$file] = fileatime($file);
+                    if (file_exists($file) && strtotime($date_time . " - 1 hour") > fileatime($file)) {
+                        unlink($file);
+                    }
+                }
+            }
+
+           /* header("HTTP/1.1 200 OK");
+            header("Pragma: public");
+            header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+            header("Cache-Control: private", false);
+            header('Content-Description: File Transfer');
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="test"');
+            header('Content-Transfer-Encoding: binary');*/
+
+            $date = date('d.m__H-i-s');
+            $writer->save('C:\OpenServer\domains\localhost\Misu_Cattle\assets\download_files\info_' . $date . '_.xlsx');
+
+            // якщо все добре відправляється масив даних
+            return json_encode($x = ['newData' => $new_array_data, 'download_files' => 'http://localhost/Misu_Cattle/assets/download_files/info_' . $date . '_.xlsx']);
+        } else {
+            // якщо не вдалося отримати запит  'data'=>$new_array_params,
+            return json_encode($x = ['result' => 'array_error']);
+        }
     }
 
 }

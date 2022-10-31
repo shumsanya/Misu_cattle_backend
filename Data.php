@@ -98,6 +98,7 @@ class Data extends ActiveRecord
 
         foreach ($new_array_params as $key=>$value)
         {
+            $array[$key]['device_id'] = $value['device_id'];
             $array[$key]['acceleration'] = explode(' ', $value['acceleration']);
             $array[$key]['rotation'] = explode(' ', $value['rotation']);
             $array[$key]['gravity'] = explode(' ', $value['gravity']);
