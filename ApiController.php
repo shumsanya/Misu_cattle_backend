@@ -191,6 +191,7 @@ class ApiController extends Controller
 
             $result = array();
             $new_array_params = array();
+            $downloadFile = '';
 
             if ( isset($params['startPeriod']) ){
                 // якщо є заданий період
@@ -211,11 +212,19 @@ class ApiController extends Controller
 
 
             // пошук провалів в записі даних, чи є 60 записів в 1 хвилину
-            $incomplete_data = self::actionIncompleteData($new_array_params);
+            //$incomplete_data = self::actionIncompleteData($new_array_params);
 
 
             // розділення строк на числа
             $new_array_data = Data::getDataParse($new_array_params);
+
+
+            // зберегти в файл Ексель, отримати посилання на файл
+            if ($params['saveInExcel'])
+            {
+                $downloadFile = self::actionCreateExcel($new_array_data);
+            }
+
 
             // сума модулів
             if ($params['visualSwitch'] === 'module')
@@ -228,7 +237,7 @@ class ApiController extends Controller
             }
 
             // якщо все добре відправляється масив даних
-            return  json_encode( $x=['newData'=>$new_array_data, 'visual'=>$params['visualSwitch'], 'incomplete_data'=>$incomplete_data,'date'=>date('Y-m-d G:i', $params['date']/1000)] );
+            return  json_encode( $x=['newData'=>$new_array_data, 'downloadFile'=>$downloadFile, 'date'=>date('Y-m-d G:i', $params['date']/1000)] );
         }else {
             // якщо не вдалося отримати запит  'data'=>$new_array_params,
             return json_encode( $x=['result'=>'array_error']);
@@ -356,9 +365,9 @@ class ApiController extends Controller
      * Створення збереження файлу EXCEL, та відправка url на фронт
      * @throws \PhpOffice\PhpSpreadsheet\Writer\Exception
      */
-    public function actionCreateExcel()
+    public static function actionCreateExcel($new_array_data)
     {
-        if (YII::$app->request->get()) {
+        /*if (YII::$app->request->get()) {
             $params = Yii::$app->request->getBodyParams();
 
             $result = array();
@@ -381,7 +390,7 @@ class ApiController extends Controller
             }
 
             // розділення строк на числа
-            $new_array_data = Data::getDataParse($new_array_params);
+            $new_array_data = Data::getDataParse($new_array_params);*/
 
 //************************************************************************************************************************************************
 
@@ -472,11 +481,13 @@ class ApiController extends Controller
             $writer->save('C:\OpenServer\domains\localhost\Misu_Cattle\assets\download_files\info_' . $date . '_.xlsx');
 
             // якщо все добре відправляється масив даних
-            return json_encode($x = ['newData' => $new_array_data, 'download_files' => 'http://localhost/Misu_Cattle/assets/download_files/info_' . $date . '_.xlsx']);
-        } else {
-            // якщо не вдалося отримати запит  'data'=>$new_array_params,
-            return json_encode($x = ['result' => 'array_error']);
-        }
+            return "http://localhost/Misu_Cattle/assets/download_files/info_" . $date . "_.xlsx";
+
+        /* } else {
+             // якщо не вдалося отримати запит  'data'=>$new_array_params,
+             return json_encode($x = ['result' => 'array_error']);
+         }*/
     }
+
 
 }
