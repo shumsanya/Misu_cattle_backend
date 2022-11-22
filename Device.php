@@ -9,7 +9,6 @@ use yii\helpers\Url;
 /**
  * Class Users
  * @package app\models
- *
  * @property int $id
  * @property string $device_name
  * @property int $device_number
@@ -58,12 +57,12 @@ use yii\helpers\Url;
             return false;
         }
 
-        public static function createDevice($deviceName, $deviceNumber)
+        public static function createDevice($deviceName, $deviceNumber, $recordDate)
         {
             $model = new Device();
             $model->device_name = $deviceName;
             $model->device_number = $deviceNumber;
-            $model->date = date('Y-m-d G:i');
+            $model->date = $recordDate;
             $model->save();
 
             return Device::find()->where(['device_name' => $deviceName])->asArray()->one();

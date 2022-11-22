@@ -4,6 +4,7 @@ namespace app\controllers;
 
 use app\models\Device;
 use app\models\Data;
+use app\models\Surveillance;
 use Yii;
 use yii\filters\Cors;
 use yii\web\Controller;
@@ -40,17 +41,49 @@ class ApiController extends Controller
         ];
     }
 
-
-    public function actionGetData()
+    /**
+     * костиль для формування правильного часу по тайм зоні +2
+     * треба зважати на  ліній перехід часу
+     * @return false|string
+     */
+    public static function getDateTime()
     {
-        $allData = Device::find()
-            ->asArray()
-            ->all();
+        $date = date('Y-m-d G:i:s');
 
-        return json_encode($allData);
+        return date('Y-m-d G:i:s', strtotime($date. " - 1 hour"));
     }
 
+    /**
+     * @return false|string
+     * вибрати всі існуючі девайси та всі девайси по яким були записи останніх 5 хвилин
+     */
+    public function actionGetData()
+    {
+        $date = self::getDateTime();
+        $dateStartPeriod = date('Y-m-d G:i', strtotime($date. " - 5 minutes"));
+        $dateEndPeriod = $date;
 
+
+            $allData = Device::find()
+                ->asArray()
+                ->all();
+
+            $activeDevice = Data::find()
+                ->select('device_id')
+                ->groupBy('device_id')
+                ->where(['between', 'date', $dateStartPeriod, $dateEndPeriod])
+                ->asArray()
+                ->all();
+
+            return json_encode(['allDevice' => $allData, 'activeDevice' => $activeDevice, 'date'=>$date]);
+    }
+
+    /**
+     * Запис даних отриманих від девайсу
+     *
+     * @return false|string
+     * @throws \yii\base\InvalidConfigException
+     */
     public function actionDeviceData()
     {
         if (YII::$app->request->get()) {
@@ -76,7 +109,6 @@ class ApiController extends Controller
                     $device = Device::find()->where(['device_name' => $device_name])->asArray()->one();
                     $model->device_id = $device['id'];
 
-                //$model->date = date('Y-m-d G:i');    // дата по замовчуванню;
                 $model->save(false);
             }
             return json_encode(['result' => 'ok']);
@@ -84,7 +116,13 @@ class ApiController extends Controller
         return json_encode(['result' => 'error']);
     }
 
-
+    /**
+     * Запис даних отриманих від девайсу Arduino, дата та час, зібрані дані парсяться та записуються
+     *
+     * @return false|string
+     * @throws \yii\base\InvalidConfigException
+     * @throws \yii\db\Exception
+     */
     public function actionDeviceDataArduino()
     {
         if (YII::$app->request->get()) {
@@ -125,7 +163,8 @@ class ApiController extends Controller
             }
 
             $insertCount = 0; // чи потрібно ?
-            if(count($dataInsert)>0){
+            if(count($dataInsert)>0)
+            {
                 $columnNameArray=['rotation', 'acceleration', 'date', 'device_id'];
                 // below line insert all your record and return number of rows inserted
                 $insertCount = Yii::$app->db->createCommand()
@@ -164,7 +203,7 @@ class ApiController extends Controller
                 {
                     if ($key === 'date'){
                         $date_ = substr($value, 0, 16);
-                        //$time = substr($value, 11, 8);
+                        // $time = substr($value, 11, 8);
                         // $model->$key = $date_;
                         $model->$key = date('Y-m-d G:i', strtotime($date_. " + 2 hour"));
                         $model->date_default = $value;
@@ -184,6 +223,10 @@ class ApiController extends Controller
     }
 
 
+    /**
+     * Побудова графіків по часовим проміжкам
+     * @return false|string
+     */
     public function actionBuildChart()
     {
         if (YII::$app->request->get()) {
@@ -206,7 +249,7 @@ class ApiController extends Controller
 
 
             // якщо даних немає
-            if (!$new_array_params){
+            if (!$new_array_params ){
                 return json_encode( $x=['result'=>'array_empty', 'visual'=>$params['visualSwitch']]);
             }
 
@@ -245,7 +288,10 @@ class ApiController extends Controller
     }
 
 
-
+    /**
+     * пошук даних для графіка по заданим проміжкам дат
+     * @return array|false|\yii\db\ActiveRecord[]
+     */
     public static function actionBuildChartParams($params)
     {
         $startPeriod = $params['startPeriod'];
@@ -258,7 +304,7 @@ class ApiController extends Controller
 
         // якщо даних немає
         if (count($resultData) === 0){
-            return json_encode( $x=['result'=>'array_empty', 'visual'=>$params['visualSwitch']]);
+            return false;
         } else {
             return $resultData;
         }
@@ -353,7 +399,7 @@ class ApiController extends Controller
 
             $deviceName = $params['deviceName'];
             $deviceNumber = $params['deviceNumber'];
-            $result = Device::createDevice($deviceName, $deviceNumber);
+            $result = Device::createDevice($deviceName, $deviceNumber, self::getDateTime());
 
             return json_encode($result);
         }
@@ -489,5 +535,38 @@ class ApiController extends Controller
          }*/
     }
 
+    /**
+     * Зберегти опис спостереження
+     * @return false|string
+     **/
+    public function actionSaveDescription()
+    {
+        // отримуємо данні девайса
+        if (YII::$app->request->get()) {
+            $params = Yii::$app->request->getBodyParams();
+
+            $result = Surveillance::saveDescription($params['device_id'], $params['description'], $params['dateStart'], $params['dateEnd'], self::getDateTime());
+
+            return json_encode(['Save Description' => $result]);
+        }
+        return json_encode(['Save Description' => 'error']);
+    }
+
+    /**
+     * Отримати всі записані спостереження по заданому девайсу
+     * @return false|string
+     */
+    public function actionGetSurveillance()
+    {
+        // отримуємо данні девайса
+        if (YII::$app->request->get()) {
+            $params = Yii::$app->request->getBodyParams();
+
+            $result = Surveillance::getDescription($params['device_id']);
+
+            return json_encode(['GetSurveillance' => $result]);
+        }
+        return json_encode(['GetSurveillance' => 'error']);
+    }
 
 }
